@@ -27,9 +27,6 @@ private:
     Eigen::Matrix<float, 3, 13> _H_pos;
     Eigen::Matrix<float, 4, 13> _H_ang;
 
-    void readInputs();
-    void predict(const float &gx, const float &gy, const float &gz, const float &ax, const float &ay, const float &az);
-    void correct(const float &px, const float &py, const float &pz, const float &qw, const float &qx, const float &qy, const float &qz);
     void doCorrectionMath(const Eigen::Ref<const Eigen::MatrixXf> &, const Eigen::Ref<const Eigen::MatrixXf> &, const Eigen::Ref<const Eigen::MatrixXf> &);
     void predictAngle();
     void calcInertialAcceleration();
@@ -40,6 +37,8 @@ private:
     void updateProcessNoiseJacobian();
 
 public:
+    void predict(const float &gx, const float &gy, const float &gz, const float &ax, const float &ay, const float &az);
+    void correct(const float &px, const float &py, const float &pz, const float &qw, const float &qx, const float &qy, const float &qz);
     void getPosition(float &px, float &py, float &pz);
     void getVelocity(float &vx, float &vy, float &vz);
     void getAccBias(float &ax_b, float &ay_b, float &az_b);

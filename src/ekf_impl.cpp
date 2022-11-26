@@ -7,9 +7,9 @@ EKF_Impl::EKF_Impl(float dt) : _dt(dt) {
 void EKF_Impl::reset() {
     _x.Zero();
     _x(6, 0) = 1;
-    _x(10, 0) = -0.05;  // ax bias
-    _x(11, 0) = -0.04;  // ay bias
-    _x(12, 0) = -0.24;  // az bias
+    _x(10, 0) = 0.0;  // ax bias
+    _x(11, 0) = 0.0;  // ay bias
+    _x(12, 0) = 0.0;  // az bias
     _P.Identity();
     _P = _P * 0.1;
     assert(_x.rows() == 13 && _x.cols() == 1);
