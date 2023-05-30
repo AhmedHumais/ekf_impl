@@ -2,10 +2,12 @@ cmake_minimum_required(VERSION 2.8.3)
 
 project(ekf_impl)
 
+find_package(Boost)
 include_directories(
     include
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/Eigen
+    ${Boost_INCLUDE_DIRS}
 )
 
 add_library(${PROJECT_NAME} src/ekf_impl.cpp)
-target_link_libraries(${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})

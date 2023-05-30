@@ -5,52 +5,58 @@ EKF_Impl::EKF_Impl(float dt) : _dt(dt) {
 }
 
 void EKF_Impl::reset() {
-    _x.Zero();
+    _x = zero_matrix<float>(_x.size1(),_x.size2());
     _x(6, 0) = 1;
     _x(10, 0) = 0.0;  // ax bias
     _x(11, 0) = 0.0;  // ay bias
     _x(12, 0) = 0.0;  // az bias
-    _P.Identity();
+    _P = identity_matrix<float>(_P.size1());
     _P = _P * 0.1;
-    assert(_x.rows() == 13 && _x.cols() == 1);
-    assert(_P.rows() == 13 && _P.cols() == 13);
-    _H_ang.Zero(); _H_ang(0,6) = 1; _H_ang(1,7) = 1; _H_ang(2,8) = 1; _H_ang(3,9) = 1; 
-    _H_pos.Zero(); _H_pos(0,0) = 1; _H_pos(1,1) = 1; _H_pos(2,2) = 1;
-    _Q.diagonal() << 0.1893, 0.2238, 1.5781, 0.0097, 0.0133, 0.000106;
+    assert(_x.size1() == 13 && _x.size2() == 1);
+    assert(_P.size1() == 13 && _P.size2() == 13);
+    _H_ang = zero_matrix<float>(_H_ang.size1(),_H_ang.size2()); _H_ang(0,6) = 1; _H_ang(1,7) = 1; _H_ang(2,8) = 1; _H_ang(3,9) = 1; 
+    _H_pos = zero_matrix<float>(_H_pos.size1(),_H_pos.size2()); _H_pos(0,0) = 1; _H_pos(1,1) = 1; _H_pos(2,2) = 1;
+    std::vector<float> diag ={0.1893, 0.2238, 1.5781, 0.0097, 0.0133, 0.000106};
+    _Q = diagonal_matrix<float,row_major,std::vector<float>>(6, diag);
 
-    _Qtune.Zero(); 
+    _Qtune = zero_matrix<float>(_Qtune.size1(),_Qtune.size2()); 
 
     // position prediction trust parameters 
-    _Qtune.block<3, 3>(0, 0) << 1E-9, 0,    0,
-                                0,    1E-9, 0,
-                                0,    0,    1E-9;
+
+    subslice(_Qtune, 0,1,3, 0,1,3) = diagonal_matrix<float>(3,unbounded_array<float>(3,1e-9));
 
     // velocity prediction trust parameters
-    _Qtune.block<3, 3>(3, 3) << 1E-4, 0,    0,
-                                0,    1.5E-4, 0,
-                                0,    0,    2E-4;
+    subslice(_Qtune, 3,1,3, 3,1,3) = diagonal_matrix<float>(3, unbounded_array<float>(3, 1e-4));
+    // _Qtune.block<3, 3>(3, 3) << 1E-4, 0,    0,
+    //                             0,    1.5E-4, 0,
+    //                             0,    0,    2E-4;
 
     // orientation prediction trust parameters
-    _Qtune.block<4, 4>(6,6) << 1E-5, 0,     0,      0,
-                               0,    1E-5,  0,      0,
-                               0,    0,     1E-5,   0,
-                               0,    0,     0,      1E-5;
+    subslice(_Qtune, 6,1,4, 6,1,4) = diagonal_matrix<float>(3, unbounded_array<float>(4, 1E-5));
+    // _Qtune.block<4, 4>(6,6) << 1E-5, 0,     0,      0,
+    //                            0,    1E-5,  0,      0,
+    //                            0,    0,     1E-5,   0,
+    //                            0,    0,     0,      1E-5;
 
     // acceleration bias prediction trust
-    _Qtune.block<3, 3>(10, 10) << 0,    0,    0,
-                                  0,    0,    0,
-                                  0,    0,    0;
+    subslice(_Qtune, 10,1,3, 10,1,3) = zero_matrix<float>(3);
+    // _Qtune.block<3, 3>(10, 10) << 0,    0,    0,
+    //                               0,    0,    0,
+    //                               0,    0,    0;
 
     // measurement trust parameters (position)
-    _R_pos << 5e-2, 0,    0,
-              0,    5e-2, 0,
-              0,    0,    5e-2;
+    _R_pos = diagonal_matrix<float>(3, unbounded_array<float>(3, 5e-2));
+    // _R_pos << 5e-2, 0,    0,
+    //           0,    5e-2, 0,
+    //           0,    0,    5e-2;
 
     // measurement trust parameters (orientation)
-    _R_ang << 1E-5, 0,      0,    0,
-              0,    1E-5,   0,    0,
-              0,    0,      1E-5, 0,
-              0,    0,      0,    1E-5;
+    _R_ang = diagonal_matrix<float>(4, unbounded_array<float>(3, 1E-5));
+    
+    // _R_ang << 1E-5, 0,      0,    0,
+    //           0,    1E-5,   0,    0,
+    //           0,    0,      1E-5, 0,
+    //           0,    0,      0,    1E-5;
 
     initialized = false; 
     std::cout << "Kalman filter Reset\n";   
@@ -90,7 +96,8 @@ void EKF_Impl::predict(const float &gx, const float &gy, const float &gz, const 
     predictVelocity();
     predictPosition();
     updatePredictionCoveriance();
-    _P = _Fx.transpose() * _P * _Fx + _FQ.transpose() * _Q *_FQ + _Qtune;
+    // _P = _Fx.transpose() * _P * _Fx + _FQ.transpose() * _Q *_FQ + _Qtune;
+    _P = prod(matrix<float>(prod(trans(_Fx), _P)), _Fx) + prod(matrix<float>(prod(trans(_FQ), _Q)),_FQ) + _Qtune;
 }
 
 void EKF_Impl::correct(const float &px, const float &py, const float &pz, const float &qw, const float &qx, const float &qy, const float &qz) {
@@ -101,21 +108,29 @@ void EKF_Impl::correct(const float &px, const float &py, const float &pz, const 
         initialized = true;
         return;
     }
-    Eigen::Matrix<float, 7, 13> H;
-    H.block<3, 13>(0, 0) << _H_pos;
-    H.block<4, 13>(3, 0) << _H_ang;
-    Eigen::Matrix<float, 7, 1> z;
-    z << px, py, pz, qw, qx, qy, qz;
-    Eigen::Matrix<float, 7, 7> R; R = Eigen::ArrayXXf::Zero(7, 7);
-    R.block<3, 3>(0, 0) << _R_pos;
-    R.block<4, 4>(3, 3) << _R_ang;
+    // Eigen::Matrix<float, 7, 13> H;
+    // H.block<3, 13>(0, 0) << _H_pos;
+    // H.block<4, 13>(3, 0) << _H_ang;
+    matrix<float> H(7,13);
+    subrange(H, 0,3, 0,13) = _H_pos;
+    subrange(H, 3,7, 0,13) = _H_ang;
+    // Eigen::Matrix<float, 7, 1> z;
+    std::vector<float> z_data =  {px, py, pz, qw, qx, qy, qz};
+    matrix<float, row_major, std::vector<float>> z(7,1, z_data);
+    // Eigen::Matrix<float, 7, 7> R; R = Eigen::ArrayXXf::Zero(7, 7);
+    // R.block<3, 3>(0, 0) << _R_pos;
+    // R.block<4, 4>(3, 3) << _R_ang;
+    matrix<float> R = zero_matrix<float>(7);
+    subrange(R, 0,3, 0,3) = _R_pos;
+    subrange(R, 3,7, 3,7) = _R_ang;
     doCorrectionMath(H, z, R);
 }
 
 void EKF_Impl::freeze_acc_biases(){
-    _Qtune.block<3, 3>(10, 10) << 0,    0,    0,
-                                    0,    0,    0,
-                                    0,    0,    0;
+    // _Qtune.block<3, 3>(10, 10) << 0,    0,    0,
+    //                                 0,    0,    0,
+    //                                 0,    0,    0;
+    subrange(_Qtune, 10,13, 10,13) = zero_matrix<float>(3);
     std::cout <<"Freezed Acceleration Biases\n";
 }
 
@@ -217,7 +232,7 @@ void EKF_Impl::updatePredictionJacobian() {
     float t64 = (t2*t56)/2.0;
     float t65 = (t2*t57)/2.0;
     float t66 = (t2*t58)/2.0;
-    _Fx << 1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    std::vector<float> fx_data = {1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
             0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
             0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
             _dt,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
@@ -227,10 +242,24 @@ void EKF_Impl::updatePredictionJacobian() {
             t63,-t64,t65,t59,-t60,t61,t28,1.0,t30,t23,0.0,0.0,0.0,
             t64,t63,-t66,t60,t59,-t62,t29,t24,1.0,t28,0.0,0.0,0.0,
             -t65,t66,t63,-t61,t62,t59,t30,t29,t22,1.0,0.0,0.0,0.0,
-            t2*t54*(-1.0/2.0),t2*t45*(-1.0/2.0),(t2*t50)/2.0,-_dt*t54,-_dt*t45,_dt*t50,0.0,0.0,0.0,0.0,1.0,0.0,0.0,
-            (t2*t51)/2.0,t2*t53*(-1.0/2.0),t2*t43*(-1.0/2.0),_dt*t51,-_dt*t53,-_dt*t43,0.0,0.0,0.0,0.0,0.0,1.0,0.0,
-            t2*t44*(-1.0/2.0),(t2*t49)/2.0,t2*t52*(-1.0/2.0),-_dt*t44,_dt*t49,-_dt*t52,0.0,0.0,0.0,0.0,0.0,0.0,1.0; //WARNING: This is the transposed representation
-    assert((_Fx.rows() == _Fx.cols()) && (_Fx.rows() == 13));
+            t2*t54*(-1.0f/2.0f),t2*t45*(-1.0f/2.0f),(t2*t50)/2.0f,-_dt*t54,-_dt*t45,_dt*t50,0.0,0.0,0.0,0.0,1.0,0.0,0.0,
+            (t2*t51)/2.0f,t2*t53*(-1.0f/2.0f),t2*t43*(-1.0f/2.0f),_dt*t51,-_dt*t53,-_dt*t43,0.0,0.0,0.0,0.0,0.0,1.0,0.0,
+            t2*t44*(-1.0f/2.0f),(t2*t49)/2.0f,t2*t52*(-1.0f/2.0f),-_dt*t44,_dt*t49,-_dt*t52,0.0,0.0,0.0,0.0,0.0,0.0,1.0}; //WARNING: This is the transposed representation}
+    // _Fx << 1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         _dt,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         0.0,_dt,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         0.0,0.0,_dt,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,
+    //         t66,t65,t64,t62,t61,t60,1.0,t22,t23,t24,0.0,0.0,0.0,
+    //         t63,-t64,t65,t59,-t60,t61,t28,1.0,t30,t23,0.0,0.0,0.0,
+    //         t64,t63,-t66,t60,t59,-t62,t29,t24,1.0,t28,0.0,0.0,0.0,
+    //         -t65,t66,t63,-t61,t62,t59,t30,t29,t22,1.0,0.0,0.0,0.0,
+    //         t2*t54*(-1.0/2.0),t2*t45*(-1.0/2.0),(t2*t50)/2.0,-_dt*t54,-_dt*t45,_dt*t50,0.0,0.0,0.0,0.0,1.0,0.0,0.0,
+    //         (t2*t51)/2.0,t2*t53*(-1.0/2.0),t2*t43*(-1.0/2.0),_dt*t51,-_dt*t53,-_dt*t43,0.0,0.0,0.0,0.0,0.0,1.0,0.0,
+    //         t2*t44*(-1.0/2.0),(t2*t49)/2.0,t2*t52*(-1.0/2.0),-_dt*t44,_dt*t49,-_dt*t52,0.0,0.0,0.0,0.0,0.0,0.0,1.0; //WARNING: This is the transposed representation
+    _Fx = matrix<float, row_major, std::vector<float>>(13,13,fx_data);
+    assert((_Fx.size1() == _Fx.size2()) && (_Fx.size1() == 13));
 };
 void EKF_Impl::updateProcessNoiseJacobian() {
     float q1 = _x(6,0), q2 =_x(7,0), q3 = _x(8,0), q4 =_x(9,0);
@@ -260,26 +289,34 @@ void EKF_Impl::updateProcessNoiseJacobian() {
     float t25 = t3+t6+t16+t17;
     float t26 = t3+t5+t16+t18;
     float t27 = t3+t4+t17+t18;
-    _FQ << (t2*t27)/2.0,        (t2*t21)/2.0,       t2*t23*(-1.0/2.0),  _dt*t27,    _dt*t21,    -_dt*t23,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-           t2*t24*(-1.0/2.0),   (t2*t26)/2.0,       (t2*t19)/2.0,       -_dt*t24,   _dt*t26,    _dt*t19,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-           (t2*t20)/2.0,        t2*t22*(-1.0/2.0),  (t2*t25)/2.0,       _dt*t20,    -_dt*t22,   _dt*t25,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    std::vector<float> fq_data = {(t2*t27)/2.0f,        (t2*t21)/2.0f,       t2*t23*(-1.0f/2.0f),  _dt*t27,    _dt*t21,    -_dt*t23,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+           t2*t24*(-1.0f/2.0f),   (t2*t26)/2.0f,       (t2*t19)/2.0f,       -_dt*t24,   _dt*t26,    _dt*t19,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+           (t2*t20)/2.0f,        t2*t22*(-1.0f/2.0f),  (t2*t25)/2.0f,       _dt*t20,    -_dt*t22,   _dt*t25,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
            0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
            0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-           0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0; 
+           0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0};
+    _FQ = matrix<float, row_major, std::vector<float>>(6,13, fq_data);
+    // _FQ << (t2*t27)/2.0,        (t2*t21)/2.0,       t2*t23*(-1.0/2.0),  _dt*t27,    _dt*t21,    -_dt*t23,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    //        t2*t24*(-1.0/2.0),   (t2*t26)/2.0,       (t2*t19)/2.0,       -_dt*t24,   _dt*t26,    _dt*t19,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    //        (t2*t20)/2.0,        t2*t22*(-1.0/2.0),  (t2*t25)/2.0,       _dt*t20,    -_dt*t22,   _dt*t25,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    //        0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    //        0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    //        0.0,                 0.0,                0.0,                0.0,        0.0,        0.0,        0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0; 
            //WARNING: This is the transposed representation
-    assert((_FQ.rows() == 6) && (_FQ.cols() == 13));
+    assert((_FQ.size1() == 6) && (_FQ.size2() == 13));
 };
 
-void EKF_Impl::doCorrectionMath(const Eigen::Ref<const Eigen::MatrixXf> &H,
-                            const Eigen::Ref<const Eigen::MatrixXf> &z, 
-                            const Eigen::Ref<const Eigen::MatrixXf> &R) {
-    Eigen::MatrixXf K, S, I_KH;
-    S = H * _P * H.transpose() + R;
-    K = _P * H.transpose() * S.inverse();
-    _x = _x + K * (z - H * _x);
+void EKF_Impl::doCorrectionMath(const matrix<float> &H,
+                                const matrix<float> &z, 
+                                const matrix<float> &R) {
+    matrix<float> K, S, I_KH, S_inv;
+    S = prod(matrix<float>(prod(H, _P)), trans(H)) + R;
+    InvertMatrix(S, S_inv);
+    K = prod(matrix<float>(prod(_P, trans(H))), S_inv);
+    _x = _x + prod(K, (z - matrix<float>(prod(H, _x))));
     _pred_ang(_x(6,0), _x(7,0), _x(8,0), _x(9,0));
     _pred_ang.normalize();
     _x(6,0) = _pred_ang.w, _x(7,0) = _pred_ang.x, _x(8,0) = _pred_ang.y, _x(9,0) = _pred_ang.z;
-    I_KH = Eigen::MatrixXf::Identity(_P.rows(), _P.cols()) - K*H;
-    _P = I_KH * _P * I_KH.transpose() + K * R * K.transpose();
+    I_KH = identity_matrix<float>(_P.size1(), _P.size2()) - prod(K,H);
+    _P = prod(matrix<float>(prod(I_KH, _P)), trans(I_KH)) + prod(matrix<float>(prod(K, R)), trans(K));
 }
