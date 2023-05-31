@@ -1,6 +1,7 @@
 #include "ekf_impl.hpp"
 
 EKF_Impl::EKF_Impl(float dt) : _dt(dt) {
+    this->init();
     this->reset();
 }
 
@@ -32,7 +33,7 @@ void EKF_Impl::reset() {
     //                             0,    0,    2E-4;
 
     // orientation prediction trust parameters
-    subslice(_Qtune, 6,1,4, 6,1,4) = diagonal_matrix<float>(3, unbounded_array<float>(4, 1E-5));
+    subslice(_Qtune, 6,1,4, 6,1,4) = diagonal_matrix<float>(4, unbounded_array<float>(4, 1E-5));
     // _Qtune.block<4, 4>(6,6) << 1E-5, 0,     0,      0,
     //                            0,    1E-5,  0,      0,
     //                            0,    0,     1E-5,   0,
@@ -51,7 +52,7 @@ void EKF_Impl::reset() {
     //           0,    0,    5e-2;
 
     // measurement trust parameters (orientation)
-    _R_ang = diagonal_matrix<float>(4, unbounded_array<float>(3, 1E-5));
+    _R_ang = diagonal_matrix<float>(4, unbounded_array<float>(4, 1E-5));
     
     // _R_ang << 1E-5, 0,      0,    0,
     //           0,    1E-5,   0,    0,
@@ -311,6 +312,7 @@ void EKF_Impl::doCorrectionMath(const matrix<float> &H,
                                 const matrix<float> &R) {
     matrix<float> K, S, I_KH, S_inv;
     S = prod(matrix<float>(prod(H, _P)), trans(H)) + R;
+    S_inv = identity_matrix<float>(7);
     InvertMatrix(S, S_inv);
     K = prod(matrix<float>(prod(_P, trans(H))), S_inv);
     _x = _x + prod(K, (z - matrix<float>(prod(H, _x))));
