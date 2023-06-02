@@ -9,3 +9,6 @@ include_directories(
 
 add_library(${PROJECT_NAME} src/ekf_impl.cpp)
 target_link_libraries(${PROJECT_NAME})
+
+add_executable(test_ekf src/main.cpp)
+target_link_libraries(test_ekf ${PROJECT_NAME})
